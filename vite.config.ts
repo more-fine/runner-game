@@ -44,6 +44,9 @@ export default defineConfig(({ mode }) => {
               }
             ]
           },
+          devOptions: {
+            enabled: true
+          },
           workbox: {
             globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
             runtimeCaching: [
@@ -77,7 +80,7 @@ export default defineConfig(({ mode }) => {
               }
             ]
           }
-        })
+        }),
       ],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
