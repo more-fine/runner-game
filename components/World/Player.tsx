@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -66,7 +67,7 @@ export const Player: React.FC = () => {
           glowMaterial: new THREE.MeshBasicMaterial({ color: glowColor }),
           shadowMaterial: new THREE.MeshBasicMaterial({ color: '#000000', opacity: 0.3, transparent: true })
       };
-  }, [isImmortalityActive]); // Only recreate if immortality state changes (for color shift)
+  }, [isImmortalityActive]);
 
   // --- Reset State on Game Start ---
   useEffect(() => {
@@ -80,7 +81,7 @@ export const Player: React.FC = () => {
       }
   }, [status]);
   
-  // Safety: Clamp lane if laneCount changes (e.g. restart)
+  // Safety: Clamp lane if laneCount changes
   useEffect(() => {
       const maxLane = Math.floor(laneCount / 2);
       if (Math.abs(lane) > maxLane) {
@@ -88,42 +89,63 @@ export const Player: React.FC = () => {
       }
   }, [laneCount, lane]);
 
-  // --- Controls (Keyboard & Touch) ---
+  // --- Controls Logic ---
   const triggerJump = () => {
     const maxJumps = hasDoubleJump ? 2 : 1;
 
     if (!isJumping.current) {
-        // First Jump
         audio.playJump(false);
         isJumping.current = true;
         jumpsPerformed.current = 1;
         velocityY.current = JUMP_FORCE;
     } else if (jumpsPerformed.current < maxJumps) {
-        // Double Jump (Mid-air)
         audio.playJump(true);
         jumpsPerformed.current += 1;
-        velocityY.current = JUMP_FORCE; // Reset velocity upwards
-        spinRotation.current = 0; // Start flip
+        velocityY.current = JUMP_FORCE;
+        spinRotation.current = 0;
     }
   };
 
+  const moveLeft = () => {
+    const maxLane = Math.floor(laneCount / 2);
+    setLane(l => Math.max(l - 1, -maxLane));
+  };
+
+  const moveRight = () => {
+    const maxLane = Math.floor(laneCount / 2);
+    setLane(l => Math.min(l + 1, maxLane));
+  };
+
+  // Listen for Custom Game Controls (from Mobile Buttons)
+  useEffect(() => {
+    const handleGameControl = (e: any) => {
+      if (status !== GameStatus.PLAYING) return;
+      const { type } = e.detail;
+      if (type === 'left') moveLeft();
+      else if (type === 'right') moveRight();
+      else if (type === 'jump') triggerJump();
+      else if (type === 'ability') activateImmortality();
+    };
+
+    window.addEventListener('game-control', handleGameControl);
+    return () => window.removeEventListener('game-control', handleGameControl);
+  }, [status, laneCount, hasDoubleJump, activateImmortality]);
+
+  // Keyboard Controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (status !== GameStatus.PLAYING) return;
-      const maxLane = Math.floor(laneCount / 2);
-
-      if (e.key === 'ArrowLeft') setLane(l => Math.max(l - 1, -maxLane));
-      else if (e.key === 'ArrowRight') setLane(l => Math.min(l + 1, maxLane));
+      if (e.key === 'ArrowLeft') moveLeft();
+      else if (e.key === 'ArrowRight') moveRight();
       else if (e.key === 'ArrowUp' || e.key === 'w') triggerJump();
-      else if (e.key === ' ' || e.key === 'Enter') {
-          activateImmortality();
-      }
+      else if (e.key === ' ' || e.key === 'Enter') activateImmortality();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [status, laneCount, hasDoubleJump, activateImmortality]);
 
+  // Swipe Detection (Legacy/Alternative)
   useEffect(() => {
     const handleTouchStart = (e: TouchEvent) => {
       touchStartX.current = e.touches[0].clientX;
@@ -134,16 +156,12 @@ export const Player: React.FC = () => {
         if (status !== GameStatus.PLAYING) return;
         const deltaX = e.changedTouches[0].clientX - touchStartX.current;
         const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-        const maxLane = Math.floor(laneCount / 2);
 
-        // Swipe Detection
         if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
-             if (deltaX > 0) setLane(l => Math.min(l + 1, maxLane));
-             else setLane(l => Math.max(l - 1, -maxLane));
+             if (deltaX > 0) moveRight();
+             else moveLeft();
         } else if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY < -30) {
             triggerJump();
-        } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-            activateImmortality();
         }
     };
 
@@ -170,31 +188,24 @@ export const Player: React.FC = () => {
 
     // 2. Physics (Jump)
     if (isJumping.current) {
-        // Apply Velocity
         groupRef.current.position.y += velocityY.current * delta;
-        // Apply Gravity
         velocityY.current -= GRAVITY * delta;
 
-        // Floor Collision
         if (groupRef.current.position.y <= 0) {
             groupRef.current.position.y = 0;
             isJumping.current = false;
             jumpsPerformed.current = 0;
             velocityY.current = 0;
-            // Reset flip
             if (bodyRef.current) bodyRef.current.rotation.x = 0;
         }
 
-        // Double Jump Flip
         if (jumpsPerformed.current === 2 && bodyRef.current) {
-             // Rotate 360 degrees quickly
              spinRotation.current -= delta * 15;
              if (spinRotation.current < -Math.PI * 2) spinRotation.current = -Math.PI * 2;
              bodyRef.current.rotation.x = spinRotation.current;
         }
     }
 
-    // Banking Rotation
     const xDiff = targetX.current - groupRef.current.position.x;
     groupRef.current.rotation.z = -xDiff * 0.2; 
     groupRef.current.rotation.x = isJumping.current ? 0.1 : 0.05; 
@@ -203,31 +214,25 @@ export const Player: React.FC = () => {
     const time = state.clock.elapsedTime * 25; 
     
     if (!isJumping.current) {
-        // Running Cycle
         if (leftArmRef.current) leftArmRef.current.rotation.x = Math.sin(time) * 0.7;
         if (rightArmRef.current) rightArmRef.current.rotation.x = Math.sin(time + Math.PI) * 0.7;
         if (leftLegRef.current) leftLegRef.current.rotation.x = Math.sin(time + Math.PI) * 1.0;
         if (rightLegRef.current) rightLegRef.current.rotation.x = Math.sin(time) * 1.0;
-        
         if (bodyRef.current) bodyRef.current.position.y = 1.1 + Math.abs(Math.sin(time)) * 0.1;
     } else {
-        // Jumping Pose
         const jumpPoseSpeed = delta * 10;
         if (leftArmRef.current) leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, -2.5, jumpPoseSpeed);
         if (rightArmRef.current) rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, -2.5, jumpPoseSpeed);
         if (leftLegRef.current) leftLegRef.current.rotation.x = THREE.MathUtils.lerp(leftLegRef.current.rotation.x, 0.5, jumpPoseSpeed);
         if (rightLegRef.current) rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x, -0.5, jumpPoseSpeed);
-        
-        // Only reset Y if not flipping (handled by flip logic mostly, but safe here)
         if (bodyRef.current && jumpsPerformed.current !== 2) bodyRef.current.position.y = 1.1; 
     }
 
     // 4. Dynamic Shadow
     if (shadowRef.current) {
         const height = groupRef.current.position.y;
-        const scale = Math.max(0.2, 1 - (height / 2.5) * 0.5); // 2.5 is max jump height approx
+        const scale = Math.max(0.2, 1 - (height / 2.5) * 0.5); 
         const runStretch = isJumping.current ? 1 : 1 + Math.abs(Math.sin(time)) * 0.3;
-
         shadowRef.current.scale.set(scale, scale, scale * runStretch);
         const material = shadowRef.current.material as THREE.MeshBasicMaterial;
         if (material && !Array.isArray(material)) {
@@ -235,7 +240,6 @@ export const Player: React.FC = () => {
         }
     }
 
-    // Invincibility / Immortality Effect
     const showFlicker = isInvincible.current || isImmortalityActive;
     if (showFlicker) {
         if (isInvincible.current) {
@@ -258,7 +262,7 @@ export const Player: React.FC = () => {
   useEffect(() => {
      const checkHit = (e: any) => {
         if (isInvincible.current || isImmortalityActive) return;
-        audio.playDamage(); // Play damage sound
+        audio.playDamage();
         takeDamage();
         isInvincible.current = true;
         lastDamageTime.current = Date.now();
@@ -270,21 +274,13 @@ export const Player: React.FC = () => {
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
       <group ref={bodyRef} position={[0, 1.1, 0]}> 
-        
-        {/* Torso */}
         <mesh castShadow position={[0, 0.2, 0]} geometry={TORSO_GEO} material={armorMaterial} />
-
-        {/* Jetpack */}
         <mesh position={[0, 0.2, -0.2]} geometry={JETPACK_GEO} material={jointMaterial} />
         <mesh position={[-0.08, 0.1, -0.28]} geometry={GLOW_STRIP_GEO} material={glowMaterial} />
         <mesh position={[0.08, 0.1, -0.28]} geometry={GLOW_STRIP_GEO} material={glowMaterial} />
-
-        {/* Head */}
         <group ref={headRef} position={[0, 0.6, 0]}>
             <mesh castShadow geometry={HEAD_GEO} material={armorMaterial} />
         </group>
-
-        {/* Arms */}
         <group position={[0.32, 0.4, 0]}>
             <group ref={rightArmRef}>
                 <mesh position={[0, -0.25, 0]} castShadow geometry={ARM_GEO} material={armorMaterial} />
@@ -297,11 +293,7 @@ export const Player: React.FC = () => {
                  <mesh position={[0, -0.55, 0]} geometry={JOINT_SPHERE_GEO} material={glowMaterial} />
             </group>
         </group>
-
-        {/* Hips */}
         <mesh position={[0, -0.15, 0]} geometry={HIPS_GEO} material={jointMaterial} />
-
-        {/* Legs */}
         <group position={[0.12, -0.25, 0]}>
             <group ref={rightLegRef}>
                  <mesh position={[0, -0.35, 0]} castShadow geometry={LEG_GEO} material={armorMaterial} />
@@ -313,7 +305,6 @@ export const Player: React.FC = () => {
             </group>
         </group>
       </group>
-      
       <mesh ref={shadowRef} position={[0, 0.02, 0]} rotation={[-Math.PI/2, 0, 0]} geometry={SHADOW_GEO} material={shadowMaterial} />
     </group>
   );

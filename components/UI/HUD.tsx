@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -5,7 +6,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Heart, Zap, Trophy, MapPin, Diamond, Rocket, ArrowUpCircle, Shield, Activity, PlusCircle, Play } from 'lucide-react';
+import { Heart, Zap, Trophy, MapPin, Diamond, Rocket, ArrowUpCircle, Shield, Activity, PlusCircle, Play, ChevronLeft, ChevronRight, ArrowUp } from 'lucide-react';
 import { useStore } from '../../store';
 import { GameStatus, GEMINI_COLORS, ShopItem, RUN_SPEED_BASE } from '../../types';
 import { audio } from '../System/Audio';
@@ -104,6 +105,64 @@ const ShopScreen: React.FC = () => {
     );
 };
 
+// --- Mobile Controls ---
+const MobileControls: React.FC = () => {
+    const { hasImmortality } = useStore();
+    
+    const sendControl = (type: string) => {
+        window.dispatchEvent(new CustomEvent('game-control', { detail: { type } }));
+    };
+
+    const btnBase = "w-16 h-16 md:w-20 md:h-20 flex items-center justify-center rounded-full backdrop-blur-md border-2 active:scale-90 transition-all pointer-events-auto";
+    const moveBtn = `${btnBase} border-cyan-500/50 bg-cyan-500/10 text-cyan-400`;
+    const actionBtn = `${btnBase} border-pink-500/50 bg-pink-500/10 text-pink-400`;
+    const skillBtn = `${btnBase} border-yellow-500/50 bg-yellow-500/10 text-yellow-400`;
+
+    return (
+        <div className="absolute inset-0 pointer-events-none z-[60] flex flex-col justify-end p-6 md:hidden">
+            <div className="flex justify-between items-end w-full mb-4">
+                {/* Left Side: Movement */}
+                <div className="flex space-x-4">
+                    <button 
+                        onPointerDown={() => sendControl('left')} 
+                        className={moveBtn}
+                        aria-label="Move Left"
+                    >
+                        <ChevronLeft size={32} />
+                    </button>
+                    <button 
+                        onPointerDown={() => sendControl('right')} 
+                        className={moveBtn}
+                        aria-label="Move Right"
+                    >
+                        <ChevronRight size={32} />
+                    </button>
+                </div>
+
+                {/* Right Side: Jump & Skill */}
+                <div className="flex flex-col space-y-4 items-center">
+                    {hasImmortality && (
+                        <button 
+                            onPointerDown={() => sendControl('ability')} 
+                            className={skillBtn}
+                            aria-label="Activate Ability"
+                        >
+                            <Shield size={28} />
+                        </button>
+                    )}
+                    <button 
+                        onPointerDown={() => sendControl('jump')} 
+                        className={actionBtn}
+                        aria-label="Jump"
+                    >
+                        <ArrowUp size={32} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const HUD: React.FC = () => {
   const { score, lives, maxLives, collectedLetters, status, level, restartGame, startGame, gemsCollected, distance, isImmortalityActive, speed } = useStore();
   const target = ['G', 'E', 'M', 'I', 'N', 'I'];
@@ -145,7 +204,7 @@ export const HUD: React.FC = () => {
                         </button>
 
                         <p className="text-cyan-400/60 text-[10px] md:text-xs font-mono mt-3 tracking-wider">
-                            [ ARROWS / SWIPE TO MOVE ]
+                            [ ARROWS / BUTTONS TO MOVE ]
                         </p>
                      </div>
                 </div>
@@ -231,68 +290,70 @@ export const HUD: React.FC = () => {
   }
 
   return (
-    <div className={containerClass}>
-        {/* Top Bar */}
-        <div className="flex justify-between items-start w-full">
-            <div className="flex flex-col">
-                <div className="text-3xl md:text-5xl font-bold text-cyan-400 drop-shadow-[0_0_10px_#00ffff] font-cyber">
-                    {score.toLocaleString()}
+    <>
+        <div className={containerClass}>
+            {/* Top Bar */}
+            <div className="flex justify-between items-start w-full">
+                <div className="flex flex-col">
+                    <div className="text-3xl md:text-5xl font-bold text-cyan-400 drop-shadow-[0_0_10px_#00ffff] font-cyber">
+                        {score.toLocaleString()}
+                    </div>
+                </div>
+                
+                <div className="flex space-x-1 md:space-x-2">
+                    {[...Array(maxLives)].map((_, i) => (
+                        <Heart 
+                            key={i} 
+                            className={`w-6 h-6 md:w-8 md:h-8 ${i < lives ? 'text-pink-500 fill-pink-500' : 'text-gray-800 fill-gray-800'} drop-shadow-[0_0_5px_#ff0054]`} 
+                        />
+                    ))}
                 </div>
             </div>
             
-            <div className="flex space-x-1 md:space-x-2">
-                {[...Array(maxLives)].map((_, i) => (
-                    <Heart 
-                        key={i} 
-                        className={`w-6 h-6 md:w-8 md:h-8 ${i < lives ? 'text-pink-500 fill-pink-500' : 'text-gray-800 fill-gray-800'} drop-shadow-[0_0_5px_#ff0054]`} 
-                    />
-                ))}
+            {/* Level Indicator */}
+            <div className="absolute top-5 left-1/2 transform -translate-x-1/2 text-sm md:text-lg text-purple-300 font-bold tracking-wider font-mono bg-black/50 px-3 py-1 rounded-full border border-purple-500/30 backdrop-blur-sm z-50">
+                LEVEL {level} <span className="text-gray-500 text-xs md:text-sm">/ 3</span>
+            </div>
+
+            {/* Active Skill Indicator */}
+            {isImmortalityActive && (
+                <div className="absolute top-24 left-1/2 transform -translate-x-1/2 text-yellow-400 font-bold text-xl md:text-2xl animate-pulse flex items-center drop-shadow-[0_0_10px_gold]">
+                    <Shield className="mr-2 fill-yellow-400" /> IMMORTAL
+                </div>
+            )}
+
+            {/* Gemini Collection Status */}
+            <div className="absolute top-16 md:top-24 left-1/2 transform -translate-x-1/2 flex space-x-1.5 md:space-x-3">
+                {target.map((char, idx) => {
+                    const isCollected = collectedLetters.includes(idx);
+                    const color = GEMINI_COLORS[idx];
+
+                    return (
+                        <div 
+                            key={idx}
+                            style={{
+                                borderColor: isCollected ? color : 'rgba(55, 65, 81, 0.4)',
+                                color: isCollected ? 'rgba(0, 0, 0, 0.8)' : 'rgba(100, 116, 139, 0.5)',
+                                boxShadow: isCollected ? `0 0 15px ${color}` : 'none',
+                                backgroundColor: isCollected ? color : 'rgba(0, 0, 0, 0.6)'
+                            }}
+                            className={`w-7 h-9 md:w-10 md:h-12 flex items-center justify-center border-2 font-black text-sm md:text-xl font-cyber rounded-lg transform transition-all duration-300`}
+                        >
+                            {char}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Bottom Overlay - Hidden on small mobile to make room for virtual buttons */}
+            <div className="hidden md:flex w-full justify-end items-end">
+                <div className="flex items-center space-x-2 text-cyan-500 opacity-70">
+                    <Zap className="w-4 h-4 md:w-6 md:h-6 animate-pulse" />
+                    <span className="font-mono text-base md:text-xl">SPEED {Math.round((speed / RUN_SPEED_BASE) * 100)}%</span>
+                </div>
             </div>
         </div>
-        
-        {/* Level Indicator - Moved to Top Center aligned with Score/Hearts */}
-        <div className="absolute top-5 left-1/2 transform -translate-x-1/2 text-sm md:text-lg text-purple-300 font-bold tracking-wider font-mono bg-black/50 px-3 py-1 rounded-full border border-purple-500/30 backdrop-blur-sm z-50">
-            LEVEL {level} <span className="text-gray-500 text-xs md:text-sm">/ 3</span>
-        </div>
-
-        {/* Active Skill Indicator */}
-        {isImmortalityActive && (
-             <div className="absolute top-24 left-1/2 transform -translate-x-1/2 text-yellow-400 font-bold text-xl md:text-2xl animate-pulse flex items-center drop-shadow-[0_0_10px_gold]">
-                 <Shield className="mr-2 fill-yellow-400" /> IMMORTAL
-             </div>
-        )}
-
-        {/* Gemini Collection Status - Just below Top Bar */}
-        <div className="absolute top-16 md:top-24 left-1/2 transform -translate-x-1/2 flex space-x-2 md:space-x-3">
-            {target.map((char, idx) => {
-                const isCollected = collectedLetters.includes(idx);
-                const color = GEMINI_COLORS[idx];
-
-                return (
-                    <div 
-                        key={idx}
-                        style={{
-                            borderColor: isCollected ? color : 'rgba(55, 65, 81, 1)',
-                            // Use dark text (almost black) when collected to contrast with neon background
-                            color: isCollected ? 'rgba(0, 0, 0, 0.8)' : 'rgba(55, 65, 81, 1)',
-                            boxShadow: isCollected ? `0 0 20px ${color}` : 'none',
-                            backgroundColor: isCollected ? color : 'rgba(0, 0, 0, 0.9)'
-                        }}
-                        className={`w-8 h-10 md:w-10 md:h-12 flex items-center justify-center border-2 font-black text-lg md:text-xl font-cyber rounded-lg transform transition-all duration-300`}
-                    >
-                        {char}
-                    </div>
-                );
-            })}
-        </div>
-
-        {/* Bottom Overlay */}
-        <div className="w-full flex justify-end items-end">
-             <div className="flex items-center space-x-2 text-cyan-500 opacity-70">
-                 <Zap className="w-4 h-4 md:w-6 md:h-6 animate-pulse" />
-                 <span className="font-mono text-base md:text-xl">SPEED {Math.round((speed / RUN_SPEED_BASE) * 100)}%</span>
-             </div>
-        </div>
-    </div>
+        {status === GameStatus.PLAYING && <MobileControls />}
+    </>
   );
 };
